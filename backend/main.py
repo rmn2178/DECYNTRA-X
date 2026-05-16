@@ -6,6 +6,7 @@ from backend.database import engine
 from backend.neo4j_client import neo4j_client
 from backend.redis_client import redis_client
 from backend.routers.graph import router as graph_router
+from backend.routers.analytics import router as analytics_router
 from sqlalchemy import text
 
 @asynccontextmanager
@@ -26,6 +27,8 @@ app.add_middleware(
 
 # Routers
 app.include_router(graph_router)
+app.include_router(analytics_router)
+
 
 @app.get("/api/health")
 async def health_check():

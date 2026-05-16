@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import ForceGraph2D, { ForceGraphMethods, NodeObject, LinkObject } from 'react-force-graph-2d';
+import ForceGraph2D from 'react-force-graph-2d';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/axios';
 import Drawer from '../components/ui/Drawer';
@@ -21,7 +21,7 @@ const NODE_COLORS: Record<string, string> = {
 const LINK_COLOR = 'rgba(100,100,100,0.35)';
 
 // ── Types ────────────────────────────────────────────────────────────
-interface GraphNode extends NodeObject {
+interface GraphNode {
   id: string;
   type: string;
   name?: string;
@@ -30,10 +30,15 @@ interface GraphNode extends NodeObject {
   dueDate?: string;
   daysPastDue?: number;
   paymentCycleDays?: number;
+  x?: number;
+  y?: number;
+  vx?: number;
+  vy?: number;
+  index?: number;
   [key: string]: unknown;
 }
 
-interface GraphLink extends LinkObject {
+interface GraphLink {
   source: string;
   target: string;
   type: string;
@@ -117,7 +122,7 @@ const badgeVariant = (type: string) => {
 // ── Component ────────────────────────────────────────────────────────
 const KnowledgeGraph: React.FC = () => {
   const qc = useQueryClient();
-  const graphRef = useRef<ForceGraphMethods>();
+  const graphRef = useRef<any>();
   const containerRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 800, h: 500 });
 
@@ -195,13 +200,13 @@ const KnowledgeGraph: React.FC = () => {
     });
   };
 
-  const handleNodeClick = useCallback((node: NodeObject) => {
+  const handleNodeClick = useCallback((node: any) => {
     setSelectedNode(node as GraphNode);
     setDrawerOpen(true);
   }, []);
 
   const handleNodeCanvasObject = useCallback(
-    (node: NodeObject, ctx: CanvasRenderingContext2D, globalScale: number) => {
+    (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const n = node as GraphNode;
       const r = nodeRadius(n);
       const x = node.x ?? 0;

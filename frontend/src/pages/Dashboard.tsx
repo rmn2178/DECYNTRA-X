@@ -1,107 +1,361 @@
 import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, ReferenceLine,
+} from 'recharts';
+import api from '../lib/axios';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import ChatBar from '../components/ui/ChatBar';
 import Drawer from '../components/ui/Drawer';
-import { TrendingDown, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
-import styles from './Page.module.css';
+import SkeletonLoader from '../components/ui/SkeletonLoader';
+import { TrendingDown, AlertTriangle, CheckCircle, Clock, Zap } from 'lucide-react';
+import styles from './Dashboard.module.css';
 
-const KPI_DATA = [
-  { label: 'Cash Runway', value: '8 days', status: 'critical', icon: <TrendingDown size={18} /> },
-  { label: 'Overdue Invoices', value: '₹1.3L', status: 'warning', icon: <AlertTriangle size={18} /> },
-  { label: 'Decisions Avoided', value: '5', status: 'safe', icon: <CheckCircle size={18} /> },
-  { label: 'AI Latency Saved', value: '47h 28m', status: 'pending', icon: <Clock size={18} /> },
+// ── Types ────────────────────────────────────────────────────────────
+interface DailyBalance { date: string; balance: number; inflow: number; outflow: number; note: string }
+interface CashRunway { daily_balances: DailyBalance[]; days_until_danger: number; danger_threshold: number; current_balance: number }
+interface OverdueInvoice { invoice_id: string; customer_name: string; amount: number; due_date: string; days_overdue: number }
+interface UpcomingPayable { vendor_id: string; vendor_name: string; amount: number; due_date: string; days_until_due: number }
+interface TriggerItem { source_type: string; source_id: string; label: string; amount: number; urgency: string }
+interface ShortfallSignal { severity: string; days_until_shortfall: number; amount: number; trigger_items: TriggerItem[] }
+
+// ── Mocks (used when API offline) ────────────────────────────────────
+const MOCK_RUNWAY: CashRunway = {
+  current_balance: 120000, danger_threshold: 40000, days_until_danger: 8,
+  daily_balances: Array.from({ length: 30 }, (_, i) => ({
+    date: new Date(Date.now() + i * 86400000).toISOString().slice(0, 10),
+    balance: Math.max(0, 120000 - i * 5200 + (i === 3 ? 80000 : 0) + (i === 10 ? 50000 : 0)),
+    inflow:  i === 3 ? 80000 : i === 10 ? 50000 : 0,
+    outflow: 5200,
+    note: i === 3 ? 'Globex Corp expected payment' : i === 10 ? 'Initech payment' : '',
+  })),
+};
+
+const MOCK_OVERDUE: OverdueInvoice[] = [
+  { invoice_id: 'i-1', customer_name: 'Globex Corp',  amount: 50000, due_date: '2026-04-26', days_overdue: 20 },
+  { invoice_id: 'i-2', customer_name: 'Initech',       amount: 80000, due_date: '2026-05-01', days_overdue: 15 },
+  { invoice_id: 'i-3', customer_name: 'Umbrella Corp', amount: 30000, due_date: '2026-05-15', days_overdue: 1  },
 ];
 
-const ALERTS = [
-  { id: 1, title: 'Globex Corp — Invoice overdue by 20 days', severity: 'critical' as const, amount: '₹50,000' },
-  { id: 2, title: 'Initech — Invoice overdue by 15 days', severity: 'critical' as const, amount: '₹80,000' },
-  { id: 3, title: 'Umbrella Corp — Payment due in 1 day', severity: 'warning' as const, amount: '₹30,000' },
-  { id: 4, title: 'Supplier A payable due in 3 days', severity: 'warning' as const, amount: '₹25,000' },
+const MOCK_PAYABLES: UpcomingPayable[] = [
+  { vendor_id: 'v-1', vendor_name: 'Supplier A', amount: 25000, due_date: '2026-05-19', days_until_due: 3 },
+  { vendor_id: 'v-2', vendor_name: 'Supplier B', amount: 18000, due_date: '2026-05-22', days_until_due: 6 },
+  { vendor_id: 'v-3', vendor_name: 'Supplier C', amount: 12000, due_date: '2026-05-23', days_until_due: 7 },
 ];
 
+const MOCK_SHORTFALL: ShortfallSignal = {
+  severity: 'critical', days_until_shortfall: 8, amount: -43000,
+  trigger_items: [
+    { source_type: 'invoice', source_id: 'i-1', label: 'Globex Corp — overdue 20d', amount: -50000, urgency: 'critical' },
+    { source_type: 'invoice', source_id: 'i-2', label: 'Initech — overdue 15d',     amount: -80000, urgency: 'critical' },
+    { source_type: 'payable', source_id: 'v-1', label: 'Supplier A — due in 3d',    amount:  25000, urgency: 'warning'  },
+  ],
+};
+
+// ── Custom tooltip for the AreaChart ─────────────────────────────────
+const ChartTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload as DailyBalance;
+  return (
+    <div className={styles.tooltip}>
+      <div className={styles.tooltipDate}>{label}</div>
+      <div className={styles.tooltipRow}>
+        <span>Balance</span>
+        <strong>₹{d.balance.toLocaleString()}</strong>
+      </div>
+      {d.inflow > 0 && (
+        <div className={styles.tooltipRow}>
+          <span style={{ color: '#22C55E' }}>Inflow</span>
+          <strong style={{ color: '#22C55E' }}>+₹{d.inflow.toLocaleString()}</strong>
+        </div>
+      )}
+      {d.outflow > 0 && (
+        <div className={styles.tooltipRow}>
+          <span style={{ color: '#EF4444' }}>Outflow</span>
+          <strong style={{ color: '#EF4444' }}>-₹{d.outflow.toLocaleString()}</strong>
+        </div>
+      )}
+      {d.note && <div className={styles.tooltipNote}>{d.note}</div>}
+    </div>
+  );
+};
+
+// ── Main Component ────────────────────────────────────────────────────
 const Dashboard: React.FC = () => {
-  const [query, setQuery] = useState('');
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [selectedAlert, setSelectedAlert] = useState<(typeof ALERTS)[0] | null>(null);
+  const [chartDrawerOpen, setChartDrawerOpen] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<DailyBalance | null>(null);
+  const [triggerDrawerOpen, setTriggerDrawerOpen] = useState(false);
+  const [selectedTrigger, setSelectedTrigger] = useState<TriggerItem | null>(null);
+  const [nlQuery, setNlQuery] = useState('');
 
-  const handleQuery = (v: string) => setQuery(v);
+  const { data: runway = MOCK_RUNWAY, isLoading: runwayLoading } =
+    useQuery<CashRunway>({ queryKey: ['cash-runway'], queryFn: () => api.get('/api/analytics/cash-runway').then(r => r.data), retry: false });
+
+  const { data: overdue = MOCK_OVERDUE } =
+    useQuery<OverdueInvoice[]>({ queryKey: ['overdue'], queryFn: () => api.get('/api/analytics/overdue').then(r => r.data), retry: false });
+
+  const { data: payables = MOCK_PAYABLES } =
+    useQuery<UpcomingPayable[]>({ queryKey: ['payables'], queryFn: () => api.get('/api/analytics/payables').then(r => r.data), retry: false });
+
+  const { data: shortfall = MOCK_SHORTFALL } =
+    useQuery<ShortfallSignal>({ queryKey: ['shortfall'], queryFn: () => api.get('/api/analytics/shortfall').then(r => r.data), retry: false });
+
+  const handleChartClick = (data: any) => {
+    if (data?.activePayload?.[0]) {
+      setSelectedDay(data.activePayload[0].payload);
+      setChartDrawerOpen(true);
+    }
+  };
+
+  const openTrigger = (item: TriggerItem) => {
+    setSelectedTrigger(item);
+    setTriggerDrawerOpen(true);
+  };
+
+  // Determine area chart gradient colour based on severity
+  const chartColor = shortfall.severity === 'critical' ? '#EF4444'
+    : shortfall.severity === 'warning' ? '#F59E0B'
+    : '#22C55E';
 
   return (
     <div className={styles.page}>
-      <div className={styles.content}>
-        <div className={styles.pageHeader}>
-          <h1 className={styles.pageTitle}>Dashboard</h1>
-          <p className={styles.pageSubtitle}>Prevent SME cash flow crises 10 days before they occur</p>
-        </div>
 
-        {/* KPI Row */}
-        <div className={styles.kpiGrid}>
-          {KPI_DATA.map((k) => (
-            <Card key={k.label}>
-              <div className={styles.kpiCard}>
-                <div className={styles.kpiCardTop}>
-                  <span className={styles.kpiIcon}>{k.icon}</span>
-                  <Badge variant={k.status as any} dot>{k.status}</Badge>
-                </div>
-                <div className={styles.kpiValue}>{k.value}</div>
-                <div className={styles.kpiLabel}>{k.label}</div>
-              </div>
-            </Card>
-          ))}
-        </div>
-
-        {/* Alerts */}
-        <Card header="Active Alerts">
-          <div className={styles.alertList}>
-            {ALERTS.map((a) => (
+      {/* ── Shortfall Banner ─────────────────────────────────────────── */}
+      {shortfall.severity !== 'safe' && (
+        <div className={`${styles.banner} ${styles[`banner_${shortfall.severity}`]}`}>
+          <div className={styles.bannerLeft}>
+            <AlertTriangle size={14} />
+            <span>
+              <strong>Cash shortfall in {shortfall.days_until_shortfall} days</strong>
+              {' — '}₹{Math.abs(shortfall.amount).toLocaleString()} {shortfall.amount < 0 ? 'deficit' : 'buffer'}
+            </span>
+          </div>
+          <div className={styles.bannerTriggers}>
+            {shortfall.trigger_items.map((t) => (
               <button
-                key={a.id}
-                className={styles.alertItem}
-                onClick={() => { setSelectedAlert(a); setDrawerOpen(true); }}
+                key={t.source_id}
+                className={`${styles.bannerChip} ${styles[`chip_${t.urgency}`]}`}
+                onClick={() => openTrigger(t)}
               >
-                <div className={styles.alertLeft}>
-                  <Badge variant={a.severity} dot>{a.severity}</Badge>
-                  <span className={styles.alertTitle}>{a.title}</span>
-                </div>
-                <span className={styles.alertAmount}>{a.amount}</span>
+                {t.label}
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      <div className={styles.content}>
+
+        {/* ── KPI Strip ────────────────────────────────────────────────── */}
+        <div className={styles.kpiStrip}>
+          <div className={styles.kpiItem}>
+            <Zap size={13} className={styles.kpiStripIcon} />
+            <span className={styles.kpiStripLabel}>Decision latency</span>
+            <span className={styles.kpiStripValue}>5 min</span>
+            <span className={styles.kpiStripBaseline}>vs 48hr baseline</span>
+          </div>
+          <div className={styles.kpiDivider} />
+          <div className={styles.kpiItem}>
+            <Clock size={13} className={styles.kpiStripIcon} />
+            <span className={styles.kpiStripLabel}>Risk detected</span>
+            <span className={styles.kpiStripValue}>{runway.days_until_danger} days</span>
+            <span className={styles.kpiStripBaseline}>before crisis</span>
+          </div>
+          <div className={styles.kpiDivider} />
+          <div className={styles.kpiItem}>
+            <CheckCircle size={13} className={styles.kpiStripIcon} />
+            <span className={styles.kpiStripLabel}>Saved this month</span>
+            <span className={styles.kpiStripValue}>₹1.5L</span>
+            <span className={styles.kpiStripBaseline}>5 bad decisions avoided</span>
+          </div>
+          <div className={styles.kpiDivider} />
+          <div className={styles.kpiItem}>
+            <TrendingDown size={13} className={styles.kpiStripIcon} />
+            <span className={styles.kpiStripLabel}>AI accuracy</span>
+            <span className={styles.kpiStripValue}>92%</span>
+            <span className={styles.kpiStripBaseline}>↑ from 0% baseline</span>
+          </div>
+        </div>
+
+        {/* ── Cash Runway Chart ─────────────────────────────────────────── */}
+        <Card
+          header={
+            <div className={styles.cardHeaderRow}>
+              <div>
+                <span className={styles.cardTitle}>Cash Runway</span>
+                <span className={styles.cardSub}> — click any day for invoice/payable detail</span>
+              </div>
+              <Badge
+                variant={shortfall.severity === 'critical' ? 'critical' : shortfall.severity === 'warning' ? 'warning' : 'safe'}
+                dot
+              >
+                {runway.days_until_danger === 30 ? 'Safe 30d+' : `Danger in ${runway.days_until_danger}d`}
+              </Badge>
+            </div>
+          }
+        >
+          {runwayLoading ? (
+            <SkeletonLoader lines={6} height={16} />
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={runway.daily_balances} onClick={handleChartClick}
+                margin={{ top: 4, right: 0, left: 0, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient id="balanceGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={chartColor} stopOpacity={0.18} />
+                    <stop offset="95%" stopColor={chartColor} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={(v: string) => v.slice(5)}
+                  tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+                  axisLine={false} tickLine={false}
+                  interval={4}
+                />
+                <YAxis
+                  tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`}
+                  tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+                  axisLine={false} tickLine={false} width={52}
+                />
+                <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'var(--border-strong)', strokeWidth: 1 }} />
+                <ReferenceLine
+                  y={runway.danger_threshold}
+                  stroke="#EF4444"
+                  strokeDasharray="4 3"
+                  label={{ value: 'Danger', fill: '#EF4444', fontSize: 10, position: 'insideTopRight' }}
+                />
+                <Area
+                  type="monotone" dataKey="balance"
+                  stroke={chartColor} strokeWidth={1.5}
+                  fill="url(#balanceGrad)"
+                  dot={false} activeDot={{ r: 4, strokeWidth: 0, fill: chartColor }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </Card>
 
-        {/* NL query response area */}
-        {query && (
-          <Card header="AI Response">
-            <div className={styles.responseArea}>
-              <p className={styles.responseQuery}>You asked: <em>"{query}"</em></p>
-              <p className={styles.responseText}>Based on your current cash position of ₹1.2L with ₹1.6L in overdue receivables, a shortfall of ₹40,000 is projected within 8 days. Recommended action: chase Globex Corp immediately and negotiate a 15-day extension with Supplier A.</p>
+        {/* ── Two-column: Overdue + Payables ───────────────────────────── */}
+        <div className={styles.twoCol}>
+
+          {/* Overdue Invoices */}
+          <Card header={<span className={styles.cardTitle}>Overdue Invoices</span>}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Amount</th>
+                  <th>Overdue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {overdue.map((inv) => (
+                  <tr key={inv.invoice_id}>
+                    <td>{inv.customer_name}</td>
+                    <td className={styles.mono}>₹{inv.amount.toLocaleString()}</td>
+                    <td>
+                      <Badge variant={inv.days_overdue > 14 ? 'critical' : 'warning'} dot>
+                        {inv.days_overdue}d
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+
+          {/* Upcoming Payables */}
+          <Card header={<span className={styles.cardTitle}>Upcoming Payables</span>}>
+            <div className={styles.payableList}>
+              {payables.map((p) => (
+                <div key={p.vendor_id} className={styles.payableRow}>
+                  <div>
+                    <div className={styles.payableVendor}>{p.vendor_name}</div>
+                    <div className={styles.payableDate}>{p.due_date}</div>
+                  </div>
+                  <div className={styles.payableRight}>
+                    <span className={styles.mono}>₹{p.amount.toLocaleString()}</span>
+                    <Badge variant={p.days_until_due <= 3 ? 'critical' : p.days_until_due <= 6 ? 'warning' : 'info'}>
+                      {p.days_until_due}d
+                    </Badge>
+                  </div>
+                </div>
+              ))}
             </div>
+          </Card>
+        </div>
+
+        {/* NL response */}
+        {nlQuery && (
+          <Card header="AI Response">
+            <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+              You asked: <em>"{nlQuery}"</em>
+            </p>
+            <p style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.7, marginTop: 8 }}>
+              Based on current data: cash runway is {runway.days_until_danger} days.
+              ₹{overdue.reduce((s, i) => s + i.amount, 0).toLocaleString()} in overdue receivables.
+              Recommend chasing Globex Corp immediately and extending Supplier A's payable by 7 days.
+            </p>
           </Card>
         )}
       </div>
 
-      <ChatBar onSubmit={handleQuery} />
+      <ChatBar onSubmit={setNlQuery} />
 
-      <Drawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        title={selectedAlert?.title}
-      >
-        {selectedAlert && (
-          <div className={styles.drawerContent}>
-            <div className={styles.drawerRow}>
-              <span className={styles.drawerKey}>Amount</span>
-              <span className={styles.drawerVal}>{selectedAlert.amount}</span>
+      {/* ── Day Detail Drawer ─────────────────────────────────────────── */}
+      <Drawer open={chartDrawerOpen} onClose={() => setChartDrawerOpen(false)}
+        title={selectedDay ? `${selectedDay.date} — Detail` : 'Day Detail'}>
+        {selectedDay && (
+          <div className={styles.drawerBody}>
+            <div className={styles.drawerStat}>
+              <span>Balance</span>
+              <strong>₹{selectedDay.balance.toLocaleString()}</strong>
             </div>
-            <div className={styles.drawerRow}>
-              <span className={styles.drawerKey}>Risk Level</span>
-              <Badge variant={selectedAlert.severity}>{selectedAlert.severity}</Badge>
+            {selectedDay.inflow > 0 && (
+              <div className={styles.drawerStat}>
+                <span style={{ color: '#22C55E' }}>Expected Inflow</span>
+                <strong style={{ color: '#22C55E' }}>+₹{selectedDay.inflow.toLocaleString()}</strong>
+              </div>
+            )}
+            {selectedDay.outflow > 0 && (
+              <div className={styles.drawerStat}>
+                <span style={{ color: '#EF4444' }}>Projected Outflow</span>
+                <strong style={{ color: '#EF4444' }}>-₹{selectedDay.outflow.toLocaleString()}</strong>
+              </div>
+            )}
+            {selectedDay.note && (
+              <p className={styles.drawerNote}>{selectedDay.note}</p>
+            )}
+          </div>
+        )}
+      </Drawer>
+
+      {/* ── Trigger Detail Drawer ─────────────────────────────────────── */}
+      <Drawer open={triggerDrawerOpen} onClose={() => setTriggerDrawerOpen(false)}
+        title={selectedTrigger?.label ?? 'Trigger Detail'}>
+        {selectedTrigger && (
+          <div className={styles.drawerBody}>
+            <div className={styles.drawerStat}>
+              <span>Type</span>
+              <Badge variant="info">{selectedTrigger.source_type}</Badge>
+            </div>
+            <div className={styles.drawerStat}>
+              <span>Amount</span>
+              <strong>₹{Math.abs(selectedTrigger.amount).toLocaleString()}</strong>
+            </div>
+            <div className={styles.drawerStat}>
+              <span>Urgency</span>
+              <Badge variant={selectedTrigger.urgency as any} dot>{selectedTrigger.urgency}</Badge>
             </div>
             <div className={styles.drawerActions}>
-              <Button variant="primary">Draft Reminder</Button>
-              <Button variant="secondary">View Invoice</Button>
+              <Button variant="primary" size="sm">Draft Action</Button>
+              <Button variant="secondary" size="sm">View Full Record</Button>
             </div>
           </div>
         )}
