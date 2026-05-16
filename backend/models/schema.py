@@ -21,6 +21,7 @@ class UserProfile(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     learned_preferences = Column(JSON, default=list)
+    decision_dna_profile = Column(JSON, default=dict)
 
 class Customer(Base):
     __tablename__ = "customers"
@@ -78,6 +79,11 @@ class DecisionOutcome(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     decision_id = Column(UUID(as_uuid=True), ForeignKey("decision_log.id"))
     outcome = Column(String)
+    projected_cash_delta = Column(Numeric(12, 2))
+    actual_cash_delta = Column(Numeric(12, 2))
+    impact_score = Column(Integer)
+    financial_delta = Column(Numeric(12, 2))
+    success_label = Column(String(50))
 
 class ActionQueue(Base):
     __tablename__ = "action_queue"

@@ -241,4 +241,3 @@ async def record_outcome(case_id: str, outcome_label: str, actual_cash_delta: fl
     org_id = record.get("org_id") if record else None
     if org_id:
         await confidence_calibration(org_id)
-*** End Patch
