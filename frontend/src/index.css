@@ -1,0 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+
+:root {
+  --primary: #00d2ff;
+  --secondary: #3a7bd5;
+  --bg-color: #0f172a;
+  --panel-bg: rgba(30, 41, 59, 0.7);
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --accent: #f43f5e;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-color);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+}
+
+.dashboard {
+  min-height: 100vh;
+  padding: 2rem;
+  background: radial-gradient(circle at top right, #1e1b4b, #0f172a);
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.header h1 {
+  font-size: 3rem;
+  background: linear-gradient(to right, var(--primary), var(--secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0;
+}
+
+.header p {
+  color: var(--text-muted);
+  font-size: 1.2rem;
+}
+
+.badge {
+  display: inline-block;
+  background: rgba(244, 63, 94, 0.2);
+  color: var(--accent);
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.9rem;
+  font-weight: bold;
+  margin-top: 1rem;
+  border: 1px solid rgba(244, 63, 94, 0.4);
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.kpi-card {
+  background: var(--panel-bg);
+  padding: 1.5rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+  transition: transform 0.2s;
+}
+
+.kpi-card:hover {
+  transform: translateY(-5px);
+  border-color: var(--primary);
+}
+
+.kpi-card h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.kpi-value {
+  font-size: 2rem;
+  font-weight: bold;
+  margin: 0.5rem 0 0;
+  color: var(--text-main);
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+}
+
+.panel {
+  background: var(--panel-bg);
+  padding: 1.5rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.panel h3 {
+  margin-top: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 0.5rem;
+}
+
+.placeholder-graph {
+  height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 0.5rem;
+  color: var(--text-muted);
+}
+
+.placeholder-queue ul {
+  list-style: none;
+  padding: 0;
+}
+
+.placeholder-queue li {
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  margin-bottom: 0.5rem;
+  border-radius: 0.5rem;
+  border-left: 4px solid var(--accent);
+}
