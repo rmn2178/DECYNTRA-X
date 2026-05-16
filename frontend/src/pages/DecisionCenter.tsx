@@ -17,11 +17,13 @@ import styles from './DecisionCenter.module.css';
 // ── Types ────────────────────────────────────────────────────────────
 interface DataPoint { entity_type: string; entity_id: string; entity_name: string; detail: string; }
 interface RiskAnalysis { problem_statement: string; root_causes: string[]; urgency_score: number; key_data_points: DataPoint[]; }
-interface StrategyOption { id: string; stance: string; action: string; pros: string[]; cons: string[]; cash_impact: number; cash_impact_days: number; confidence: number; data_references: DataPoint[]; }
+interface StrategyOption { id: string; stance: string; action: string; pros: string[]; cons: string[]; cash_impact: number; cash_impact_days: number; confidence: number; adapted_confidence?: number; data_references: DataPoint[]; }
 interface StrategyOutput { options: StrategyOption[]; recommended_option_id: string; reasoning: string; }
 interface CriticReview { option_id: string; main_risk: string; failure_probability: number; weakest_assumption: string; }
 interface CriticOutput { reviews: CriticReview[]; }
-interface DecisionPackage { package_id: string; signal_id: string; org_id: string; risk_analysis: RiskAnalysis; strategy: StrategyOutput; critic: CriticOutput; generated_at: string; status: string; chosen_option_id: string | null; }
+interface SimilarCase { case_id: string; date: string; risk_type: string; what_was_chosen: string; what_happened: string; cash_delta_actual: number; agreed_with_ai: boolean; }
+interface CalibrationResult { calibration_factor: number; historical_accuracy_pct: number; total_cases: number; evaluated_cases: number; }
+interface DecisionPackage { package_id: string; signal_id: string; org_id: string; risk_analysis: RiskAnalysis; strategy: StrategyOutput; critic: CriticOutput; generated_at: string; status: string; chosen_option_id: string | null; similar_cases: SimilarCase[]; learned_preferences: string[]; calibration?: CalibrationResult | null; }
 
 interface DailyProjection { day: number; value: number; }
 interface ScenarioResult { option_id: string; projection_array: DailyProjection[]; best_case: DailyProjection[]; worst_case: DailyProjection[]; days_until_danger_baseline: number; days_until_danger_option: number; probability_of_success: number; }
@@ -32,6 +34,31 @@ interface ScenarioComparison { option_id: string; result: ScenarioResult; gemini
 const MOCK_PACKAGE: DecisionPackage = {
   package_id: 'pkg-123', signal_id: 'sig-123', org_id: 'org-1',
   generated_at: new Date().toISOString(), status: 'pending', chosen_option_id: null,
+  similar_cases: [
+    {
+      case_id: 'case-411',
+      date: '2026-03-22',
+      risk_type: 'Overdue receivables spike',
+      what_was_chosen: 'option_2',
+      what_happened: 'good',
+      cash_delta_actual: 48000,
+      agreed_with_ai: true,
+    },
+    {
+      case_id: 'case-388',
+      date: '2026-02-09',
+      risk_type: 'Vendor concentration risk',
+      what_was_chosen: 'option_1',
+      what_happened: 'neutral',
+      cash_delta_actual: 12000,
+      agreed_with_ai: false,
+    },
+  ],
+  learned_preferences: [
+    'Prefers conservative cash recovery tactics when runway < 10 days',
+    'Historically agrees with AI on high-severity cases',
+  ],
+  calibration: { calibration_factor: 0.94, historical_accuracy_pct: 78, total_cases: 14, evaluated_cases: 12 },
   risk_analysis: {
     problem_statement: 'Cash shortfall projected within critical severity. 3 anomalies detected.',
     root_causes: ['Overdue customer payments beyond historical norms', 'Week-over-week revenue decline', 'Upcoming vendor payables creating outflow pressure'],
@@ -268,7 +295,7 @@ const DecisionCenter: React.FC = () => {
             const isRecommended = opt.id === pkg.strategy.recommended_option_id;
             const review = pkg.critic.reviews.find(r => r.option_id === opt.id);
             const isChosen = pkg.status === 'chosen' && pkg.chosen_option_id === opt.id;
-            const prob = probabilityByOptionId[opt.id] ?? opt.confidence;
+            const prob = probabilityByOptionId[opt.id] ?? opt.adapted_confidence ?? opt.confidence;
 
             return (
               <div key={opt.id} className={`${styles.optionCard} ${isRecommended ? styles.optionCard_recommended : ''}`}>
@@ -294,10 +321,10 @@ const DecisionCenter: React.FC = () => {
                   <div className={styles.metric} style={{ flex: 1, minWidth: '100%' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span className={styles.metricLabel}>Confidence</span>
-                      <span className={styles.metricVal} style={{ fontSize: 12 }}>{Math.round(opt.confidence * 100)}%</span>
+                      <span className={styles.metricVal} style={{ fontSize: 12 }}>{Math.round((opt.adapted_confidence ?? opt.confidence) * 100)}%</span>
                     </div>
                     <div className={styles.confidenceTrack}>
-                      <div className={styles.confidenceFill} style={{ width: `${opt.confidence * 100}%` }} />
+                      <div className={styles.confidenceFill} style={{ width: `${(opt.adapted_confidence ?? opt.confidence) * 100}%` }} />
                     </div>
                   </div>
                 </div>
@@ -395,6 +422,38 @@ const DecisionCenter: React.FC = () => {
                 <div className={styles.explanationHeader}>Gemini Insight · {c.option_id.replace('option_', 'Option ')}</div>
                 <p className={styles.explanationText}>{c.gemini_explanation}</p>
               </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Decision Memory */}
+        <div className={styles.memoryCard}>
+          <div className={styles.memoryHeader}>
+            <div className={styles.memoryTitle}>Decision Knowledge Graph</div>
+            <div className={styles.memorySubtitle}>Similar past cases and learned preferences</div>
+          </div>
+
+          <div className={styles.memorySectionTitle}>Similar past cases</div>
+          {pkg.similar_cases?.length ? (
+            <div className={styles.similarGrid}>
+              {pkg.similar_cases.map((c) => (
+                <div key={c.case_id} className={styles.similarCard}>
+                  <div className={styles.similarMeta}>Case {c.case_id} · {c.date}</div>
+                  <div className={styles.similarRisk}>{c.risk_type}</div>
+                  <div className={styles.similarDetail}>Chosen: {c.what_was_chosen.replace('option_', 'Option ')}</div>
+                  <div className={styles.similarDetail}>Outcome: {c.what_happened} · Δ₹{Math.round(c.cash_delta_actual).toLocaleString()}</div>
+                  <div className={styles.similarAgree}>{c.agreed_with_ai ? 'Agreed with AI' : 'Human override'}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className={styles.emptyState}>First time this risk type — building baseline</div>
+          )}
+
+          <div className={styles.memorySectionTitle}>AI has learned:</div>
+          <div className={styles.learnedList}>
+            {(pkg.learned_preferences?.length ? pkg.learned_preferences : ['No learning signal yet']).slice(0, 2).map((p, i) => (
+              <div key={i} className={styles.learnedItem}>{p}</div>
             ))}
           </div>
         </div>

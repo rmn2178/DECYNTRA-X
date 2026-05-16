@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
 
+from backend.schemas.memory import SimilarCase, PatternProfile, CalibrationResult
+
 
 # ── Agent 1: Risk Analyst ─────────────────────────────────────────────
 
@@ -29,6 +31,7 @@ class StrategyOption(BaseModel):
     cash_impact: float                 # +/- rupees
     cash_impact_days: int              # within N days
     confidence: float = Field(ge=0, le=1)
+    adapted_confidence: Optional[float] = None
     data_references: list[DataPoint]
 
 
@@ -63,6 +66,9 @@ class DecisionPackage(BaseModel):
     generated_at: str
     status: Literal["pending", "chosen", "expired"] = "pending"
     chosen_option_id: Optional[str] = None
+    similar_cases: list[SimilarCase] = []
+    learned_preferences: list[str] = []
+    calibration: Optional[CalibrationResult] = None
 
 
 # ── Query answer ─────────────────────────────────────────────────────

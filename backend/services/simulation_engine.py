@@ -77,7 +77,8 @@ async def simulate_cash_scenario(
         len(projection_array) - 1,
     )
 
-    probability_of_success = float(min(1.0, max(0.0, option.confidence)))
+    base_conf = option.adapted_confidence if option.adapted_confidence is not None else option.confidence
+    probability_of_success = float(min(1.0, max(0.0, base_conf)))
 
     return ScenarioResult(
         option_id=option.id,

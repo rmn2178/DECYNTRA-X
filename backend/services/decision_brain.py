@@ -21,6 +21,13 @@ from backend.schemas.decision import (
     DataPoint, RiskAnalysis, StrategyOption, StrategyOutput,
     CriticReview, CriticOutput, DecisionPackage, QueryAnswer,
 )
+from backend.services.memory_engine import (
+    find_similar_cases,
+    decision_pattern_learning,
+    adaptive_recommendation,
+    confidence_calibration,
+    store_decision,
+)
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GEMINI_URL = (
@@ -365,13 +372,35 @@ async def generate_decision_package(
     await _publish_progress(org_id, "Agent 1: Risk Analysis (Groq)", 20)
     risk_analysis = await agent_1_risk_analyst(risk_signal, business_context)
 
+    # Similar cases + learned preferences
+    similar_cases = await find_similar_cases(risk_signal, org_id, limit=3)
+    learned_profile = await decision_pattern_learning(org_id)
+    memory_summary = ""
+    if similar_cases:
+        items = similar_cases[:2]
+        summaries = "; ".join(
+            f"{c.risk_type} on {c.date} -> chose {c.what_was_chosen}, outcome {c.what_happened}"
+            for c in items
+        )
+        memory_summary = f"In 2 similar past cases: {summaries}"
+
     # Agent 2
     await _publish_progress(org_id, "Agent 2: Strategy Generation (Gemini)", 45)
     strategy = await agent_2_strategy(
         risk_analysis,
-        memory_context="",       # will be wired to memory service
-        decision_dna="",         # will be wired to DNA profile
+        memory_context=memory_summary,
+        decision_dna="; ".join(learned_profile.preferences),
     )
+
+    # Adapt options based on learned preferences
+    strategy.options = await adaptive_recommendation(org_id, strategy.options)
+    if strategy.options:
+        strategy.recommended_option_id = strategy.options[0].id
+
+    calibration = await confidence_calibration(org_id)
+    for opt in strategy.options:
+        base_conf = opt.adapted_confidence if opt.adapted_confidence is not None else opt.confidence
+        opt.adapted_confidence = min(1.0, max(0.0, base_conf * calibration.calibration_factor))
 
     # Agent 3
     await _publish_progress(org_id, "Agent 3: Critical Review (Groq)", 75)
@@ -387,6 +416,9 @@ async def generate_decision_package(
         strategy=strategy,
         critic=critic,
         generated_at=datetime.now(timezone.utc).isoformat(),
+        similar_cases=similar_cases,
+        learned_preferences=learned_profile.preferences,
+        calibration=calibration,
     )
 
     # Persist to decision_log
@@ -400,6 +432,7 @@ async def generate_decision_package(
             )
             pg.add(log)
             await pg.commit()
+        await store_decision(log)
     except Exception:
         pass  # DB offline — package still returned
 

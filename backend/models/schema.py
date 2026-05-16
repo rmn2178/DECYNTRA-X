@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, DateTime, ForeignKey, BigInteger, Integer, Numeric
+from sqlalchemy import Column, String, Float, DateTime, ForeignKey, BigInteger, Integer, Numeric, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from backend.database import Base
 import uuid
@@ -20,6 +20,7 @@ class UserProfile(Base):
     __tablename__ = "user_profile"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    learned_preferences = Column(JSON, default=list)
 
 class Customer(Base):
     __tablename__ = "customers"
