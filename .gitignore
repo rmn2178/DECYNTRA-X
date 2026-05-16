@@ -2,13 +2,45 @@
 node_modules/
 .pnp
 .pnp.js
+venv/
+env/
+ENV/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
 # Testing
 coverage/
+.pytest_cache/
+.mypy_cache/
+.tox/
 
 # Production
 dist/
 build/
+out/
 
 # Environment variables
 .env
@@ -35,3 +67,4 @@ logs/
 .cache/
 .npm/
 .eslintcache
+.python-version

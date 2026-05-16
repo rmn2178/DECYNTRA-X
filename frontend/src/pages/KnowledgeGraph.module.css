@@ -1,0 +1,174 @@
+.wrapper {
+  display: flex;
+  height: calc(100vh - 56px);
+  overflow: hidden;
+}
+
+/* ── Filter sidebar ───────────────────────────────────── */
+.filterBar {
+  width: 184px;
+  flex-shrink: 0;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.filterTitle {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 4px 6px 8px;
+}
+
+.typeChip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  border: none;
+  background: none;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background var(--transition), opacity var(--transition);
+}
+.typeChip:hover { background: var(--bg-hover); }
+.typeChipOff { opacity: 0.35; }
+
+.typeDot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.filterDivider {
+  height: 1px;
+  background: var(--border);
+  margin: 12px 0;
+}
+
+.legend { display: flex; flex-direction: column; gap: 6px; }
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 6px;
+}
+
+.legendLine {
+  display: block;
+  width: 20px; height: 1.5px;
+  background: rgba(100,100,100,0.5);
+  flex-shrink: 0;
+}
+
+.legendLabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: monospace;
+}
+
+/* ── Main canvas area ─────────────────────────────────── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-page);
+  flex-shrink: 0;
+}
+
+.toolbarTitle {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-right: 10px;
+}
+
+.toolbarSub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.progressWrap {
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-page);
+  flex-shrink: 0;
+}
+
+.canvas {
+  flex: 1;
+  overflow: hidden;
+  background: var(--bg-page);
+  position: relative;
+}
+
+.loadingState {
+  padding: 40px;
+  max-width: 400px;
+}
+
+/* ── Drawer body ──────────────────────────────────────── */
+.drawerBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.drawerType {
+  display: flex;
+}
+
+.propsTable {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.propRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+.propRow:last-child { border-bottom: none; }
+
+.propKey {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.propVal {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+  text-align: right;
+  word-break: break-all;
+}

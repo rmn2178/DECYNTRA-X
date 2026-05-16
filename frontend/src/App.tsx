@@ -1,67 +1,53 @@
-import { useState } from 'react';
-import './index.css';
+import React, { Suspense, lazy, useEffect } from 'react';
+import { Routes, Route } from 'react-router-dom';
+import Sidebar from './components/ui/Sidebar';
+import TopBar from './components/ui/TopBar';
+import SkeletonLoader from './components/ui/SkeletonLoader';
+import useStore from './store';
+import styles from './App.module.css';
 
-function App() {
-  const [kpis] = useState({
-    decisionLatencyMs: 172800000,
-    cashRiskDetectedDaysEarly: 10,
-    badDecisionsAvoided: 5,
-    aiAccuracyPct: 92,
-    totalCashSaved: 150000,
-  });
+const Dashboard     = lazy(() => import('./pages/Dashboard'));
+const KnowledgeGraph = lazy(() => import('./pages/KnowledgeGraph'));
+const DecisionCenter = lazy(() => import('./pages/DecisionCenter'));
+const Actions       = lazy(() => import('./pages/Actions'));
+const Memory        = lazy(() => import('./pages/Memory'));
+const DecisionDNA   = lazy(() => import('./pages/DecisionDNA'));
+const Impact        = lazy(() => import('./pages/Impact'));
+const AuditLog      = lazy(() => import('./pages/AuditLog'));
+
+const PageFallback = () => (
+  <div style={{ maxWidth: 800, margin: '40px auto', padding: '0 24px' }}>
+    <SkeletonLoader lines={6} height={20} />
+  </div>
+);
+
+const App: React.FC = () => {
+  const { darkMode } = useStore();
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+  }, [darkMode]);
 
   return (
-    <div className="dashboard">
-      <header className="header">
-        <h1>DECYNTRA-X</h1>
-        <p>Decision Intelligence Engine for SME Cash Flow</p>
-        <span className="badge">Prevent crises 10 days before they occur</span>
-      </header>
-      
-      <main className="main-content">
-        <section className="kpi-section">
-          <h2>KPI Snapshots</h2>
-          <div className="kpi-grid">
-            <div className="kpi-card">
-              <h3>Cash Risk Detected</h3>
-              <p className="kpi-value">{kpis.cashRiskDetectedDaysEarly} Days Early</p>
-            </div>
-            <div className="kpi-card">
-              <h3>AI Accuracy</h3>
-              <p className="kpi-value">{kpis.aiAccuracyPct}%</p>
-            </div>
-            <div className="kpi-card">
-              <h3>Total Cash Saved</h3>
-              <p className="kpi-value">${kpis.totalCashSaved.toLocaleString()}</p>
-            </div>
-            <div className="kpi-card">
-              <h3>Bad Decisions Avoided</h3>
-              <p className="kpi-value">{kpis.badDecisionsAvoided}</p>
-            </div>
-          </div>
-        </section>
-        
-        <section className="dashboard-grid">
-          <div className="panel">
-            <h3>Knowledge Graph</h3>
-            <div className="placeholder-graph">
-              <p>Neo4j Graph Visualization</p>
-            </div>
-          </div>
-          <div className="panel">
-            <h3>Action Queue</h3>
-            <div className="placeholder-queue">
-              <ul>
-                <li>Re-negotiate Supplier A terms (Due in 3 days)</li>
-                <li>Follow up Globex Inc (Overdue &gt; 14 days)</li>
-                <li>Delay payment to Supplier B</li>
-              </ul>
-            </div>
-          </div>
-        </section>
-      </main>
+    <div className={styles.layout}>
+      <Sidebar />
+      <div className={styles.main}>
+        <TopBar />
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
+            <Route path="/"             element={<Dashboard />} />
+            <Route path="/graph"         element={<KnowledgeGraph />} />
+            <Route path="/decisions"     element={<DecisionCenter />} />
+            <Route path="/actions"       element={<Actions />} />
+            <Route path="/memory"        element={<Memory />} />
+            <Route path="/decision-dna"  element={<DecisionDNA />} />
+            <Route path="/impact"        element={<Impact />} />
+            <Route path="/audit"         element={<AuditLog />} />
+          </Routes>
+        </Suspense>
+      </div>
     </div>
   );
-}
+};
 
 export default App;

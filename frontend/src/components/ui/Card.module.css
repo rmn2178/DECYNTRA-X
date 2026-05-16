@@ -1,0 +1,23 @@
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.body { padding: 20px; }
+
+.footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-hover);
+}

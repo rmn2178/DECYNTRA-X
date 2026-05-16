@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy[asyncio]>=2.0
+asyncpg
+alembic
+neo4j
+redis
+pydantic>=2.0
+pydantic-settings
+python-dotenv
