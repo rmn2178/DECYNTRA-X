@@ -12,6 +12,7 @@ from backend.routers.decisions import router as decisions_router
 from backend.routers.simulate import router as simulate_router
 from backend.routers.users import router as users_router
 from backend.routers.outcomes import router as outcomes_router
+from backend.routers.execute import router as execute_router
 from sqlalchemy import text
 
 @asynccontextmanager
@@ -38,6 +39,7 @@ app.include_router(decisions_router)
 app.include_router(simulate_router)
 app.include_router(users_router)
 app.include_router(outcomes_router)
+app.include_router(execute_router)
 
 
 @app.get("/api/health")

@@ -88,5 +88,11 @@ class DecisionOutcome(Base):
 class ActionQueue(Base):
     __tablename__ = "action_queue"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    action = Column(String)
-    status = Column(String(50))
+    action_type = Column(String(100))
+    payload = Column(JSON, default=dict)
+    status = Column(String(50), default="pending")
+    approved_by = Column(String)
+    org_id = Column(String)
+    rejection_reason = Column(String)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True))
