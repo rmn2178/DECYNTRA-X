@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { format } from 'date-fns';
-import { Check, X, AlertTriangle } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import api from '../lib/axios';
 import Badge from '../components/ui/Badge';
 import SkeletonLoader from '../components/ui/SkeletonLoader';

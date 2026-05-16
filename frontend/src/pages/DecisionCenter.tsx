@@ -153,12 +153,11 @@ const DecisionCenter: React.FC = () => {
   
   // Modal state
   const [disagreementModalOpen, setDisagreementModalOpen] = useState(false);
-  const [pendingOptionId, setPendingOptionId] = useState<string | null>(null);
   const [disagreementText, setDisagreementText] = useState<string | null>(null);
+  const [wsProgress] = useState<{stage: string, pct: number} | null>(null);
 
   // Use a hardcoded trigger ID for demo purposes unless passed via router state
   const signalId = 'demo-signal';
-  const [wsProgress, setWsProgress] = useState<{stage: string, pct: number} | null>(null);
 
   // Fetch package
   const { data: pkg = MOCK_PACKAGE, isLoading } = useQuery<DecisionPackage>({
@@ -193,7 +192,6 @@ const DecisionCenter: React.FC = () => {
   });
 
   const handleSelectOption = (optId: string) => {
-    setPendingOptionId(optId);
     chooseMutation.mutate({ option_id: optId, notes: optionNotes[optId] || '' });
   };
 
@@ -529,7 +527,7 @@ const DecisionCenter: React.FC = () => {
 
       {/* Reference Detail Drawer */}
       <Drawer
-        isOpen={refDrawerOpen}
+        open={refDrawerOpen}
         onClose={() => setRefDrawerOpen(false)}
         title="Entity Details"
       >
@@ -552,11 +550,10 @@ const DecisionCenter: React.FC = () => {
       </Drawer>
 
       {/* AI Disagreement Modal */}
-      <Modal 
-        isOpen={disagreementModalOpen} 
+      <Modal
+        open={disagreementModalOpen}
         onClose={() => setDisagreementModalOpen(false)}
         title="AI recommends a different approach"
-        maxWidth={480}
       >
         <div style={{ padding: '0 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
           <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>

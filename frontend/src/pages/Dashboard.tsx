@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine,
@@ -11,6 +11,7 @@ import Button from '../components/ui/Button';
 import ChatBar from '../components/ui/ChatBar';
 import Drawer from '../components/ui/Drawer';
 import SkeletonLoader from '../components/ui/SkeletonLoader';
+import useStore from '../store';
 import { TrendingDown, AlertTriangle, CheckCircle, Clock, Zap, Brain, TrendingUp, ShieldAlert } from 'lucide-react';
 import styles from './Dashboard.module.css';
 
@@ -138,6 +139,9 @@ const Dashboard: React.FC = () => {
   const [selectedTrigger, setSelectedTrigger] = useState<TriggerItem | null>(null);
   const [nlQuery, setNlQuery] = useState('');
   const [decisionTarget, setDecisionTarget] = useState<string | null>(null);
+
+  const { demoStep } = useStore();
+  void demoStep;
 
   const { data: runway = MOCK_RUNWAY, isLoading: runwayLoading } =
     useQuery<CashRunway>({ queryKey: ['cash-runway'], queryFn: () => api.get('/api/analytics/cash-runway').then(r => r.data), retry: false });

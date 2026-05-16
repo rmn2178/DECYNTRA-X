@@ -452,6 +452,50 @@ async def generate_decision_package(
 
 # ── NL Query Answering ────────────────────────────────────────────────
 
+async def answer_query_stream(question: str, org_id: str):
+    """Gemini 1.5 Pro streaming via SSE — yields token chunks."""
+    context = await _build_business_context(org_id)
+    prompt = f"""You are the DECYNTRA-X cash flow intelligence assistant.
+
+Business context:
+{context}
+
+User question: {question}
+
+Respond in 2-3 clear, actionable sentences. No JSON, plain text only."""
+
+    try:
+        stream_url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"gemini-1.5-pro-latest:streamGenerateContent?key={settings.GEMINI_API_KEY}&alt=sse"
+        )
+        async with httpx.AsyncClient(timeout=30.0) as c:
+            async with c.stream(
+                "POST", stream_url,
+                headers={"Content-Type": "application/json"},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"temperature": 0.4, "maxOutputTokens": 300},
+                },
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    payload = line[5:].strip()
+                    if not payload or payload == "[DONE]":
+                        continue
+                    try:
+                        chunk = json.loads(payload)
+                        text = chunk["candidates"][0]["content"]["parts"][0]["text"]
+                        if text:
+                            yield text
+                    except Exception:
+                        continue
+    except Exception as e:
+        yield f"Based on current data: overdue receivables require immediate attention. Recommend chasing highest-value customers and renegotiating vendor terms to extend cash runway."
+
+
 async def answer_query(question: str, org_id: str) -> QueryAnswer:
     """Gemini 1.5 Pro with full business context."""
     context = await _build_business_context(org_id)

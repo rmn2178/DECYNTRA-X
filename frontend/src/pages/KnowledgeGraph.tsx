@@ -122,7 +122,7 @@ const badgeVariant = (type: string) => {
 // ── Component ────────────────────────────────────────────────────────
 const KnowledgeGraph: React.FC = () => {
   const qc = useQueryClient();
-  const graphRef = useRef<any>();
+  const graphRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 800, h: 500 });
 
@@ -161,7 +161,7 @@ const KnowledgeGraph: React.FC = () => {
   });
 
   // Build mutation with staged progress simulation
-  const buildMutation = useMutation({
+  const buildMutation = useMutation<unknown, Error, void>({
     mutationFn: () => api.post('/api/graph/build'),
     onMutate: () => {
       setSyncing(true);
@@ -173,7 +173,7 @@ const KnowledgeGraph: React.FC = () => {
         }, (i + 1) * 700);
       });
     },
-    onSuccess: (res) => {
+    onSuccess: () => {
       setTimeout(() => {
         setSyncing(false);
         qc.invalidateQueries({ queryKey: ['graph-snapshot'] });
@@ -283,7 +283,7 @@ const KnowledgeGraph: React.FC = () => {
             variant="primary"
             size="sm"
             loading={syncing}
-            onClick={() => buildMutation.mutate()}
+            onClick={() => buildMutation.mutate(undefined)}
           >
             Sync Graph
           </Button>
