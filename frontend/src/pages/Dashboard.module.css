@@ -270,3 +270,122 @@
   gap: 8px;
   margin-top: 16px;
 }
+
+/* ── Section header ─────────────────────────────────────────────── */
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  padding: 4px 0 0;
+}
+.sectionIcon { color: var(--text-muted); }
+
+/* ── Anomaly Cards (Claude message-bubble style) ────────────────── */
+.anomalyList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.anomalyCard {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--radius-xl);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: box-shadow var(--transition);
+}
+.anomalyCard:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.anomaly_critical { border-left-color: var(--badge-critical-text); }
+.anomaly_warning  { border-left-color: var(--badge-warning-text); }
+.anomaly_info     { border-left-color: var(--badge-info-text); }
+
+.anomalyCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.anomalyCardLeft {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.anomalyIcon { color: var(--text-muted); flex-shrink: 0; }
+
+.anomalyTitle {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.anomalyNarrative {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  margin: 0;
+}
+
+.anomalyMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.anomalyMetaItem {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--bg-hover);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.metaDanger { color: #EF4444; background: var(--badge-critical-bg); }
+
+.anomalyActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ── Decision queued toast ──────────────────────────────────────── */
+.decisionQueued {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--badge-safe-bg);
+  border: 1px solid var(--badge-safe-text);
+  color: var(--badge-safe-text);
+  border-radius: var(--radius-lg);
+  padding: 10px 14px;
+  font-size: 12.5px;
+}
+.decisionQueued code {
+  font-family: monospace;
+  font-size: 11px;
+  background: rgba(0,0,0,0.07);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.decisionDismiss {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.6;
+  line-height: 1;
+}
+.decisionDismiss:hover { opacity: 1; }

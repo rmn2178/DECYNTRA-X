@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine,
@@ -11,7 +11,7 @@ import Button from '../components/ui/Button';
 import ChatBar from '../components/ui/ChatBar';
 import Drawer from '../components/ui/Drawer';
 import SkeletonLoader from '../components/ui/SkeletonLoader';
-import { TrendingDown, AlertTriangle, CheckCircle, Clock, Zap } from 'lucide-react';
+import { TrendingDown, AlertTriangle, CheckCircle, Clock, Zap, Brain, TrendingUp, ShieldAlert } from 'lucide-react';
 import styles from './Dashboard.module.css';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -21,6 +21,12 @@ interface OverdueInvoice { invoice_id: string; customer_name: string; amount: nu
 interface UpcomingPayable { vendor_id: string; vendor_name: string; amount: number; due_date: string; days_until_due: number }
 interface TriggerItem { source_type: string; source_id: string; label: string; amount: number; urgency: string }
 interface ShortfallSignal { severity: string; days_until_shortfall: number; amount: number; trigger_items: TriggerItem[] }
+
+// Anomaly types
+interface PaymentAnomaly { customer_id: string; customer_name: string; avg_payment_cycle_days: number; stddev_days: number; current_days_out: number; deviation_score: number; groq_summary: string; severity: string }
+interface SalesDrop { current_7day_avg: number; prior_7day_avg: number; drop_pct: number; flagged: boolean; groq_narrative: string }
+interface VendorRisk { vendor_id: string; vendor_name: string; score: number; risk_level: string }
+interface RiskSignal { signal_id: string; severity: string; anomaly_count: number; payment_anomalies: PaymentAnomaly[]; sales_drop: SalesDrop | null; vendor_risks: VendorRisk[]; generated_at: string }
 
 // ── Mocks (used when API offline) ────────────────────────────────────
 const MOCK_RUNWAY: CashRunway = {
@@ -52,6 +58,47 @@ const MOCK_SHORTFALL: ShortfallSignal = {
     { source_type: 'invoice', source_id: 'i-1', label: 'Globex Corp — overdue 20d', amount: -50000, urgency: 'critical' },
     { source_type: 'invoice', source_id: 'i-2', label: 'Initech — overdue 15d',     amount: -80000, urgency: 'critical' },
     { source_type: 'payable', source_id: 'v-1', label: 'Supplier A — due in 3d',    amount:  25000, urgency: 'warning'  },
+  ],
+};
+
+const MOCK_RISK_SIGNAL: RiskSignal = {
+  signal_id: 'mock-signal-001',
+  severity: 'critical',
+  anomaly_count: 3,
+  generated_at: new Date().toISOString(),
+  payment_anomalies: [
+    {
+      customer_id: 'c-1',
+      customer_name: 'Globex Corp',
+      avg_payment_cycle_days: 14.0,
+      stddev_days: 4.2,
+      current_days_out: 20,
+      deviation_score: 1.43,
+      groq_summary: 'Globex Corp is 6 days beyond their historical payment cycle, putting ₹50,000 in receivables at immediate risk of default.',
+      severity: 'critical',
+    },
+    {
+      customer_id: 'c-2',
+      customer_name: 'Initech',
+      avg_payment_cycle_days: 12.0,
+      stddev_days: 3.1,
+      current_days_out: 15,
+      deviation_score: 0.97,
+      groq_summary: 'Initech has exceeded their average payment timeline by 3 days, raising concerns about their liquidity position.',
+      severity: 'warning',
+    },
+  ],
+  sales_drop: {
+    current_7day_avg: 45000,
+    prior_7day_avg: 62000,
+    drop_pct: 27.4,
+    flagged: true,
+    groq_narrative: 'A 27.4% week-over-week revenue decline signals a demand contraction that could accelerate the projected cash shortfall by 4–5 days if unchecked.',
+  },
+  vendor_risks: [
+    { vendor_id: 'v-1', vendor_name: 'Supplier A', score: 68, risk_level: 'high' },
+    { vendor_id: 'v-2', vendor_name: 'Supplier B', score: 42, risk_level: 'medium' },
+    { vendor_id: 'v-3', vendor_name: 'Supplier C', score: 18, risk_level: 'low' },
   ],
 };
 
@@ -90,6 +137,7 @@ const Dashboard: React.FC = () => {
   const [triggerDrawerOpen, setTriggerDrawerOpen] = useState(false);
   const [selectedTrigger, setSelectedTrigger] = useState<TriggerItem | null>(null);
   const [nlQuery, setNlQuery] = useState('');
+  const [decisionTarget, setDecisionTarget] = useState<string | null>(null);
 
   const { data: runway = MOCK_RUNWAY, isLoading: runwayLoading } =
     useQuery<CashRunway>({ queryKey: ['cash-runway'], queryFn: () => api.get('/api/analytics/cash-runway').then(r => r.data), retry: false });
@@ -102,6 +150,9 @@ const Dashboard: React.FC = () => {
 
   const { data: shortfall = MOCK_SHORTFALL } =
     useQuery<ShortfallSignal>({ queryKey: ['shortfall'], queryFn: () => api.get('/api/analytics/shortfall').then(r => r.data), retry: false });
+
+  const { data: riskSignal = MOCK_RISK_SIGNAL, isLoading: riskLoading } =
+    useQuery<RiskSignal>({ queryKey: ['risk-signal'], queryFn: () => api.get('/api/anomaly/risk-signal').then(r => r.data), retry: false, staleTime: 1000 * 60 * 15 });
 
   const handleChartClick = (data: any) => {
     if (data?.activePayload?.[0]) {
@@ -290,6 +341,133 @@ const Dashboard: React.FC = () => {
             </div>
           </Card>
         </div>
+
+        {/* ── Anomaly Alerts ──────────────────────────────────────────── */}
+        <div className={styles.sectionHeader}>
+          <ShieldAlert size={15} className={styles.sectionIcon} />
+          <span>Anomaly Alerts</span>
+          <Badge variant={riskSignal.severity === 'critical' ? 'critical' : riskSignal.severity === 'warning' ? 'warning' : 'safe'} dot>
+            {riskSignal.anomaly_count} detected
+          </Badge>
+        </div>
+
+        {riskLoading ? (
+          <SkeletonLoader lines={4} height={16} />
+        ) : (
+          <div className={styles.anomalyList}>
+
+            {/* Payment anomaly cards */}
+            {riskSignal.payment_anomalies.map((a) => (
+              <div key={a.customer_id} className={`${styles.anomalyCard} ${styles[`anomaly_${a.severity}`]}`}>
+                <div className={styles.anomalyCardHeader}>
+                  <div className={styles.anomalyCardLeft}>
+                    <TrendingDown size={14} className={styles.anomalyIcon} />
+                    <span className={styles.anomalyTitle}>{a.customer_name} — Payment Delay</span>
+                  </div>
+                  <Badge variant={a.severity === 'critical' ? 'critical' : a.severity === 'warning' ? 'warning' : 'info'} dot>
+                    {a.severity}
+                  </Badge>
+                </div>
+                <p className={styles.anomalyNarrative}>{a.groq_summary}</p>
+                <div className={styles.anomalyMeta}>
+                  <span className={styles.anomalyMetaItem}>
+                    Avg cycle: {a.avg_payment_cycle_days}d
+                  </span>
+                  <span className={styles.anomalyMetaItem}>
+                    Current: {a.current_days_out}d out
+                  </span>
+                  <span className={styles.anomalyMetaItem}>
+                    {a.deviation_score.toFixed(1)}σ deviation
+                  </span>
+                </div>
+                <div className={styles.anomalyActions}>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setDecisionTarget(`payment:${a.customer_id}:${riskSignal.signal_id}`)}
+                  >
+                    <Brain size={13} style={{ marginRight: 5 }} />
+                    Generate Decision
+                  </Button>
+                  <Button variant="ghost" size="sm">View History</Button>
+                </div>
+              </div>
+            ))}
+
+            {/* Sales drop card */}
+            {riskSignal.sales_drop && (
+              <div className={`${styles.anomalyCard} ${styles.anomaly_warning}`}>
+                <div className={styles.anomalyCardHeader}>
+                  <div className={styles.anomalyCardLeft}>
+                    <TrendingUp size={14} className={styles.anomalyIcon} />
+                    <span className={styles.anomalyTitle}>Sales Drop Detected</span>
+                  </div>
+                  <Badge variant="warning" dot>warning</Badge>
+                </div>
+                <p className={styles.anomalyNarrative}>{riskSignal.sales_drop.groq_narrative}</p>
+                <div className={styles.anomalyMeta}>
+                  <span className={styles.anomalyMetaItem}>
+                    This week: ₹{riskSignal.sales_drop.current_7day_avg.toLocaleString()}
+                  </span>
+                  <span className={styles.anomalyMetaItem}>
+                    Prior week: ₹{riskSignal.sales_drop.prior_7day_avg.toLocaleString()}
+                  </span>
+                  <span className={`${styles.anomalyMetaItem} ${styles.metaDanger}`}>
+                    ↓ {riskSignal.sales_drop.drop_pct}%
+                  </span>
+                </div>
+                <div className={styles.anomalyActions}>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setDecisionTarget(`sales:${riskSignal.signal_id}`)}
+                  >
+                    <Brain size={13} style={{ marginRight: 5 }} />
+                    Generate Decision
+                  </Button>
+                  <Button variant="ghost" size="sm">Analyse Trend</Button>
+                </div>
+              </div>
+            )}
+
+            {/* Vendor risk cards */}
+            {riskSignal.vendor_risks.filter(v => v.risk_level !== 'low').map((v) => (
+              <div key={v.vendor_id} className={`${styles.anomalyCard} ${styles[`anomaly_${v.risk_level === 'critical' || v.risk_level === 'high' ? 'warning' : 'info'}`]}`}>
+                <div className={styles.anomalyCardHeader}>
+                  <div className={styles.anomalyCardLeft}>
+                    <ShieldAlert size={14} className={styles.anomalyIcon} />
+                    <span className={styles.anomalyTitle}>{v.vendor_name} — Vendor Risk</span>
+                  </div>
+                  <Badge variant={v.risk_level === 'critical' ? 'critical' : v.risk_level === 'high' ? 'warning' : 'info'}>
+                    {v.risk_level} · {v.score}/100
+                  </Badge>
+                </div>
+                <p className={styles.anomalyNarrative}>
+                  Risk score of {v.score}/100 — high payment concentration and overdue bills warrant closer monitoring.
+                </p>
+                <div className={styles.anomalyActions}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setDecisionTarget(`vendor:${v.vendor_id}:${riskSignal.signal_id}`)}
+                  >
+                    <Brain size={13} style={{ marginRight: 5 }} />
+                    Generate Decision
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Decision queued notification */}
+        {decisionTarget && (
+          <div className={styles.decisionQueued}>
+            <CheckCircle size={14} />
+            <span>Decision queued for <code>{decisionTarget}</code> — navigate to Decision Center to review.</span>
+            <button className={styles.decisionDismiss} onClick={() => setDecisionTarget(null)}>×</button>
+          </div>
+        )}
 
         {/* NL response */}
         {nlQuery && (
