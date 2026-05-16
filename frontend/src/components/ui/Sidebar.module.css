@@ -123,3 +123,44 @@
   .mobileOpen { transform: translateX(0); }
   .overlay { display: block; }
 }
+
+/* ── Pending Nav Badge ────────────────────────────────────────────── */
+.pendingBadge {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 99px;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--border);
+}
+
+.pendingBadgeCritical {
+  background: #EF4444;
+  color: #fff;
+  border-color: #EF4444;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  70% { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+.collapsedDot {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 6px;
+  height: 6px;
+  background: var(--text-secondary);
+  border-radius: 50%;
+}
+
+.collapsedDotCritical {
+  background: #EF4444;
+  animation: pulse 2s infinite;
+}

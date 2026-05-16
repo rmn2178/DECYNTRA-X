@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Brain, ShieldAlert, TrendingDown, Target, Zap, ChevronDown, ChevronRight, FileText, Check
 } from 'lucide-react';
@@ -7,6 +7,7 @@ import api from '../lib/axios';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Drawer from '../components/ui/Drawer';
+import Modal from '../components/ui/Modal';
 import styles from './DecisionCenter.module.css';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -63,10 +64,17 @@ const MOCK_PACKAGE: DecisionPackage = {
 
 // ── Component ────────────────────────────────────────────────────────
 const DecisionCenter: React.FC = () => {
+  const qc = useQueryClient();
   const [expandedReasoning, setExpandedReasoning] = useState(false);
   const [refDrawerOpen, setRefDrawerOpen] = useState(false);
   const [selectedRef, setSelectedRef] = useState<DataPoint | null>(null);
+  const [optionNotes, setOptionNotes] = useState<{ [key: string]: string }>({});
   
+  // Modal state
+  const [disagreementModalOpen, setDisagreementModalOpen] = useState(false);
+  const [pendingOptionId, setPendingOptionId] = useState<string | null>(null);
+  const [disagreementText, setDisagreementText] = useState<string | null>(null);
+
   // Use a hardcoded trigger ID for demo purposes unless passed via router state
   const signalId = 'demo-signal';
   const [wsProgress, setWsProgress] = useState<{stage: string, pct: number} | null>(null);
@@ -79,8 +87,27 @@ const DecisionCenter: React.FC = () => {
   });
 
   const chooseMutation = useMutation({
-    mutationFn: (optionId: string) => api.post('/api/decisions/choose', { package_id: pkg.package_id, option_id: optionId }),
+    mutationFn: (payload: { option_id: string, notes: string }) => 
+      api.post('/api/decisions/choose', { 
+        package_id: pkg.package_id, 
+        chosen_option_id: payload.option_id,
+        user_id: "user-1",
+        notes: payload.notes
+      }).then(r => r.data),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['decision-package', signalId] });
+      qc.invalidateQueries({ queryKey: ['pending-decisions'] });
+      if (data.disagreement_reason) {
+        setDisagreementText(data.disagreement_reason);
+        setDisagreementModalOpen(true);
+      }
+    }
   });
+
+  const handleSelectOption = (optId: string) => {
+    setPendingOptionId(optId);
+    chooseMutation.mutate({ option_id: optId, notes: optionNotes[optId] || '' });
+  };
 
   const handleRefClick = (ref: DataPoint) => {
     setSelectedRef(ref);
@@ -178,14 +205,23 @@ const DecisionCenter: React.FC = () => {
                   </div>
                 )}
 
+                <div className={styles.noteInput}>
+                  <textarea 
+                    placeholder="Add rationale or notes for this option..." 
+                    value={optionNotes[opt.id] || ''}
+                    onChange={(e) => setOptionNotes(prev => ({...prev, [opt.id]: e.target.value}))}
+                    disabled={pkg.status === 'chosen'}
+                  />
+                </div>
+
                 <div className={styles.actionRow}>
                   <Button 
                     variant={isRecommended ? "primary" : "secondary"} 
                     style={{ width: '100%' }}
-                    onClick={() => chooseMutation.mutate(opt.id)}
-                    disabled={pkg.status === 'chosen'}
+                    onClick={() => handleSelectOption(opt.id)}
+                    disabled={pkg.status === 'chosen' || chooseMutation.isPending}
                   >
-                    {isChosen ? <><Check size={16} style={{ marginRight: 6 }}/> Chosen</> : 'Execute Option'}
+                    {isChosen ? <><Check size={16} style={{ marginRight: 6 }}/> Chosen</> : 'Select this option'}
                   </Button>
                 </div>
               </div>
@@ -285,6 +321,28 @@ const DecisionCenter: React.FC = () => {
           </div>
         )}
       </Drawer>
+
+      {/* AI Disagreement Modal */}
+      <Modal 
+        isOpen={disagreementModalOpen} 
+        onClose={() => setDisagreementModalOpen(false)}
+        title="AI recommends a different approach"
+        maxWidth={480}
+      >
+        <div style={{ padding: '0 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
+            {disagreementText}
+          </p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 8 }}>
+            <Button variant="ghost" onClick={() => setDisagreementModalOpen(false)}>
+              Let me reconsider
+            </Button>
+            <Button variant="primary" onClick={() => setDisagreementModalOpen(false)}>
+              I understand, proceed
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
     </div>
   );

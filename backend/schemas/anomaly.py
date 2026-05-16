@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Literal
+from typing import Literal, Optional
 
 
 # ── Payment Anomaly ───────────────────────────────────────────────────
@@ -45,7 +45,7 @@ class RiskSignal(BaseModel):
     severity: Literal["critical", "warning", "safe"]
     anomaly_count: int
     payment_anomalies: list[PaymentAnomaly]
-    sales_drop: SalesDropResult | None
+    sales_drop: Optional[SalesDropResult] = None
     vendor_risks: list[VendorRiskScore]
     generated_at: str
     ttl_seconds: int = 900

@@ -392,7 +392,12 @@ async def generate_decision_package(
     # Persist to decision_log
     try:
         async with AsyncSessionLocal() as pg:
-            log = DecisionLog(details=package.model_dump_json())
+            log = DecisionLog(
+                package_id=package_id,
+                org_id=org_id,
+                details=package.model_dump_json(),
+                status="pending"
+            )
             pg.add(log)
             await pg.commit()
     except Exception:

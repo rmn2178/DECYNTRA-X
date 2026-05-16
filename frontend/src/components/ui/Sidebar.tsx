@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import api from '../../lib/axios';
 import {
   LayoutDashboard, Network, BrainCircuit, Zap, BookOpen,
   Dna, TrendingUp, ScrollText, Menu, X, ChevronLeft
@@ -20,6 +22,17 @@ const NAV_ITEMS = [
 const Sidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Fetch pending decisions count
+  const { data: pendingDecisions = [] } = useQuery({
+    queryKey: ['pending-decisions'],
+    queryFn: () => api.get('/api/decisions/pending').then(r => r.data),
+    retry: false,
+    refetchInterval: 30000, // poll every 30s
+  });
+
+  const criticalPending = pendingDecisions.some((d: any) => d.risk_analysis?.urgency_score >= 8);
+  const pendingCount = pendingDecisions.length;
 
   return (
     <>
@@ -51,20 +64,37 @@ const Sidebar: React.FC = () => {
 
         {/* Nav */}
         <nav className={styles.nav}>
-          {NAV_ITEMS.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              end={item.path === '/'}
-              className={({ isActive }) =>
-                `${styles.navItem} ${isActive ? styles.active : ''}`
-              }
-              title={collapsed ? item.label : undefined}
-            >
-              <span className={styles.navIcon}>{item.icon}</span>
-              {!collapsed && <span className={styles.navLabel}>{item.label}</span>}
-            </NavLink>
-          ))}
+          {NAV_ITEMS.map((item) => {
+            const isDecisions = item.path === '/decisions';
+            
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                end={item.path === '/'}
+                className={({ isActive }) =>
+                  `${styles.navItem} ${isActive ? styles.active : ''}`
+                }
+                title={collapsed ? item.label : undefined}
+              >
+                <span className={styles.navIcon}>{item.icon}</span>
+                {!collapsed && (
+                  <span className={styles.navLabel} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    {item.label}
+                    {isDecisions && pendingCount > 0 && (
+                      <span className={`${styles.pendingBadge} ${criticalPending ? styles.pendingBadgeCritical : ''}`}>
+                        {pendingCount}
+                      </span>
+                    )}
+                  </span>
+                )}
+                {/* Collapsed dot indicator */}
+                {collapsed && isDecisions && pendingCount > 0 && (
+                  <span className={`${styles.collapsedDot} ${criticalPending ? styles.collapsedDotCritical : ''}`} />
+                )}
+              </NavLink>
+            );
+          })}
         </nav>
 
         {/* Footer */}

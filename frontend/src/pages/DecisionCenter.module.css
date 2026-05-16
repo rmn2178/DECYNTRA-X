@@ -169,6 +169,35 @@
   margin-bottom: 4px;
 }
 
+.noteInput {
+  margin-top: 8px;
+}
+
+.noteInput textarea {
+  width: 100%;
+  min-height: 60px;
+  resize: vertical;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: all var(--transition);
+}
+
+.noteInput textarea:focus {
+  outline: none;
+  border-color: var(--text-primary);
+  background: var(--bg-surface);
+}
+
+.noteInput textarea:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .actionRow {
   display: flex;
   justify-content: stretch;

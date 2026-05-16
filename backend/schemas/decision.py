@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Literal
+from typing import Literal, Optional
 
 
 # ── Agent 1: Risk Analyst ─────────────────────────────────────────────
@@ -62,7 +62,7 @@ class DecisionPackage(BaseModel):
     critic: CriticOutput
     generated_at: str
     status: Literal["pending", "chosen", "expired"] = "pending"
-    chosen_option_id: str | None = None
+    chosen_option_id: Optional[str] = None
 
 
 # ── Query answer ─────────────────────────────────────────────────────

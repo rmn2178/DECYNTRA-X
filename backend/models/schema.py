@@ -62,7 +62,15 @@ class KPISnapshot(Base):
 class DecisionLog(Base):
     __tablename__ = "decision_log"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    package_id = Column(String, index=True)
+    org_id = Column(String)
     details = Column(String)
+    status = Column(String(50), default="pending")
+    decided_at = Column(DateTime(timezone=True))
+    chosen_option_id = Column(String)
+    notes = Column(String)
+    disagreement_reason = Column(String)
+    user_id = Column(String)
 
 class DecisionOutcome(Base):
     __tablename__ = "decision_outcomes"
