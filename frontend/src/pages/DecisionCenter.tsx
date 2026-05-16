@@ -1,8 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Brain, ShieldAlert, TrendingDown, Target, Zap, ChevronDown, ChevronRight, FileText, Check
+  Brain, ShieldAlert, Target, Zap, ChevronDown, ChevronRight, FileText, Check
 } from 'lucide-react';
+import {
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  ReferenceLine, CartesianGrid, Line, Scatter
+} from 'recharts';
 import api from '../lib/axios';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
@@ -18,6 +22,11 @@ interface StrategyOutput { options: StrategyOption[]; recommended_option_id: str
 interface CriticReview { option_id: string; main_risk: string; failure_probability: number; weakest_assumption: string; }
 interface CriticOutput { reviews: CriticReview[]; }
 interface DecisionPackage { package_id: string; signal_id: string; org_id: string; risk_analysis: RiskAnalysis; strategy: StrategyOutput; critic: CriticOutput; generated_at: string; status: string; chosen_option_id: string | null; }
+
+interface DailyProjection { day: number; value: number; }
+interface ScenarioResult { option_id: string; projection_array: DailyProjection[]; best_case: DailyProjection[]; worst_case: DailyProjection[]; days_until_danger_baseline: number; days_until_danger_option: number; probability_of_success: number; }
+interface RiskOverlayItem { day: number; event_description: string; }
+interface ScenarioComparison { option_id: string; result: ScenarioResult; gemini_explanation: string; risk_events: RiskOverlayItem[]; }
 
 // ── Mocks ────────────────────────────────────────────────────────────
 const MOCK_PACKAGE: DecisionPackage = {
@@ -62,6 +71,51 @@ const MOCK_PACKAGE: DecisionPackage = {
   }
 };
 
+const MOCK_COMPARISONS: ScenarioComparison[] = [
+  {
+    option_id: 'option_1',
+    result: {
+      option_id: 'option_1',
+      projection_array: Array.from({ length: 30 }, (_, i) => ({ day: i, value: 300000 - i * 9000 })),
+      best_case: Array.from({ length: 30 }, (_, i) => ({ day: i, value: 320000 - i * 8500 })),
+      worst_case: Array.from({ length: 30 }, (_, i) => ({ day: i, value: 280000 - i * 9500 })),
+      days_until_danger_baseline: 12,
+      days_until_danger_option: 16,
+      probability_of_success: 0.72,
+    },
+    gemini_explanation: 'Option 1 slows the burn rate with low execution risk, extending the runway slightly versus baseline.',
+    risk_events: [{ day: 5, event_description: 'Vendor renewal due' }],
+  },
+  {
+    option_id: 'option_2',
+    result: {
+      option_id: 'option_2',
+      projection_array: Array.from({ length: 30 }, (_, i) => ({ day: i, value: 300000 - i * 7500 })),
+      best_case: Array.from({ length: 30 }, (_, i) => ({ day: i, value: 330000 - i * 7000 })),
+      worst_case: Array.from({ length: 30 }, (_, i) => ({ day: i, value: 270000 - i * 8200 })),
+      days_until_danger_baseline: 12,
+      days_until_danger_option: 20,
+      probability_of_success: 0.78,
+    },
+    gemini_explanation: 'Option 2 improves collections faster, pushing the danger point out by about a week with moderate tradeoffs.',
+    risk_events: [{ day: 9, event_description: 'Sales dip expected' }],
+  },
+  {
+    option_id: 'option_3',
+    result: {
+      option_id: 'option_3',
+      projection_array: Array.from({ length: 30 }, (_, i) => ({ day: i, value: 300000 - i * 6000 })),
+      best_case: Array.from({ length: 30 }, (_, i) => ({ day: i, value: 340000 - i * 5400 })),
+      worst_case: Array.from({ length: 30 }, (_, i) => ({ day: i, value: 250000 - i * 7800 })),
+      days_until_danger_baseline: 12,
+      days_until_danger_option: 24,
+      probability_of_success: 0.61,
+    },
+    gemini_explanation: 'Option 3 creates the largest runway extension but carries higher operational and relationship risk.',
+    risk_events: [{ day: 14, event_description: 'Large receivable review' }],
+  },
+];
+
 // ── Component ────────────────────────────────────────────────────────
 const DecisionCenter: React.FC = () => {
   const qc = useQueryClient();
@@ -83,6 +137,13 @@ const DecisionCenter: React.FC = () => {
   const { data: pkg = MOCK_PACKAGE, isLoading } = useQuery<DecisionPackage>({
     queryKey: ['decision-package', signalId],
     queryFn: () => api.post('/api/decisions/generate', { risk_signal_id: signalId }).then(r => r.data),
+    retry: false
+  });
+
+  const { data: scenarioComparisons = MOCK_COMPARISONS } = useQuery<ScenarioComparison[]>({
+    queryKey: ['scenario-comparisons', pkg.package_id],
+    queryFn: () => api.post('/api/simulate/compare', { package_id: pkg.package_id }).then(r => r.data),
+    enabled: Boolean(pkg?.package_id),
     retry: false
   });
 
@@ -112,6 +173,62 @@ const DecisionCenter: React.FC = () => {
   const handleRefClick = (ref: DataPoint) => {
     setSelectedRef(ref);
     setRefDrawerOpen(true);
+  };
+
+  const dangerThreshold = 200000;
+  const baselineSeries = Array.from({ length: 30 }, (_, i) => ({ day: i, baseline: 300000 - i * 10000 }));
+
+  const probabilityByOptionId = scenarioComparisons.reduce((acc, item) => {
+    acc[item.option_id] = item.result.probability_of_success;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const chartData = baselineSeries.map((b) => {
+    const row: any = { day: b.day, baseline: b.baseline };
+    scenarioComparisons.forEach((c) => {
+      const proj = c.result.projection_array[b.day];
+      const best = c.result.best_case[b.day];
+      const worst = c.result.worst_case[b.day];
+      if (proj) row[c.option_id] = proj.value;
+      if (best && worst) row[`${c.option_id}_band`] = [worst.value, best.value];
+    });
+    return row;
+  });
+
+  const riskEventDays = Array.from(
+    new Set(scenarioComparisons.flatMap((c) => c.risk_events.map((e) => e.day)))
+  ).map((day) => ({ day, y: dangerThreshold }));
+
+  const TriangleMarker = (props: any) => {
+    const { cx, cy } = props;
+    if (cx == null || cy == null) return null;
+    return (
+      <g transform={`translate(${cx}, ${cy - 6})`}>
+        <path d="M0 0 L6 10 L-6 10 Z" fill="#111827" />
+      </g>
+    );
+  };
+
+  const ChartTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null;
+    const pMap = payload.reduce((acc: any, item: any) => {
+      acc[item.dataKey] = item.value;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return (
+      <div className={styles.chartTooltip}>
+        <div className={styles.tooltipTitle}>Day {label}</div>
+        <div className={styles.tooltipRow}><span>Baseline</span><strong>₹{Math.round(pMap.baseline || 0).toLocaleString()}</strong></div>
+        <div className={styles.tooltipRow}><span>Option 1</span><strong>₹{Math.round(pMap.option_1 || 0).toLocaleString()}</strong></div>
+        <div className={styles.tooltipRow}><span>Option 2</span><strong>₹{Math.round(pMap.option_2 || 0).toLocaleString()}</strong></div>
+        <div className={styles.tooltipRow}><span>Option 3</span><strong>₹{Math.round(pMap.option_3 || 0).toLocaleString()}</strong></div>
+        <div className={styles.tooltipProb}>Success probabilities</div>
+        <div className={styles.tooltipRow}><span>Option 1</span><strong>{Math.round((probabilityByOptionId.option_1 ?? 0) * 100)}%</strong></div>
+        <div className={styles.tooltipRow}><span>Option 2</span><strong>{Math.round((probabilityByOptionId.option_2 ?? 0) * 100)}%</strong></div>
+        <div className={styles.tooltipRow}><span>Option 3</span><strong>{Math.round((probabilityByOptionId.option_3 ?? 0) * 100)}%</strong></div>
+      </div>
+    );
   };
 
   if (isLoading) {
@@ -151,12 +268,16 @@ const DecisionCenter: React.FC = () => {
             const isRecommended = opt.id === pkg.strategy.recommended_option_id;
             const review = pkg.critic.reviews.find(r => r.option_id === opt.id);
             const isChosen = pkg.status === 'chosen' && pkg.chosen_option_id === opt.id;
+            const prob = probabilityByOptionId[opt.id] ?? opt.confidence;
 
             return (
               <div key={opt.id} className={`${styles.optionCard} ${isRecommended ? styles.optionCard_recommended : ''}`}>
                 {isRecommended && <div className={styles.recommendedBadge}>AI RECOMMENDED</div>}
                 
-                <div className={styles.stance}>{opt.stance}</div>
+                <div className={styles.stanceRow}>
+                  <div className={styles.stance}>{opt.stance}</div>
+                  <div className={styles.probabilityBadge}>{Math.round(prob * 100)}% likely to succeed</div>
+                </div>
                 <h3 className={styles.action}>{opt.action}</h3>
                 
                 <div className={styles.metrics}>
@@ -227,6 +348,55 @@ const DecisionCenter: React.FC = () => {
               </div>
             );
           })}
+        </div>
+
+        {/* What-If Simulation */}
+        <div className={styles.simulationCard}>
+          <div className={styles.simulationHeader}>
+            <div className={styles.simulationTitle}>What-If Simulation Engine</div>
+            <div className={styles.simulationSubtitle}>Baseline vs 3 strategic options with uncertainty bands</div>
+          </div>
+
+          <div className={styles.chartWrap}>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={chartData} margin={{ top: 12, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(0,0,0,0.08)" vertical={false} />
+                <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+                <Tooltip content={<ChartTooltip />} />
+                <ReferenceLine y={dangerThreshold} stroke="#EF4444" strokeDasharray="6 6" />
+
+                <Line type="monotone" dataKey="baseline" stroke="#9CA3AF" strokeDasharray="6 6" dot={false} />
+
+                <Area type="monotone" dataKey="option_1_band" isRange stroke="none" fill="rgba(34, 197, 94, 0.15)" />
+                <Area type="monotone" dataKey="option_1" stroke="#22C55E" fill="none" dot={false} />
+
+                <Area type="monotone" dataKey="option_2_band" isRange stroke="none" fill="rgba(245, 158, 11, 0.18)" />
+                <Area type="monotone" dataKey="option_2" stroke="#F59E0B" fill="none" dot={false} />
+
+                <Area type="monotone" dataKey="option_3_band" isRange stroke="none" fill="rgba(239, 68, 68, 0.12)" />
+                <Area type="monotone" dataKey="option_3" stroke="#EF4444" fill="none" dot={false} />
+
+                <Scatter data={riskEventDays} fill="#111827" shape={<TriangleMarker />} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className={styles.simulationLegend}>
+            <span className={styles.legendItem}><span className={styles.legendSwatch} style={{ background: '#9CA3AF' }} /> Baseline</span>
+            <span className={styles.legendItem}><span className={styles.legendSwatch} style={{ background: '#22C55E' }} /> Option 1 (conservative)</span>
+            <span className={styles.legendItem}><span className={styles.legendSwatch} style={{ background: '#F59E0B' }} /> Option 2 (balanced)</span>
+            <span className={styles.legendItem}><span className={styles.legendSwatch} style={{ background: '#EF4444' }} /> Option 3 (aggressive)</span>
+          </div>
+
+          <div className={styles.explanationGrid}>
+            {scenarioComparisons.map((c) => (
+              <div key={c.option_id} className={styles.explanationCard}>
+                <div className={styles.explanationHeader}>Gemini Insight · {c.option_id.replace('option_', 'Option ')}</div>
+                <p className={styles.explanationText}>{c.gemini_explanation}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* AI Reasoning Expandable */}

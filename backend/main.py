@@ -9,6 +9,7 @@ from backend.routers.graph import router as graph_router
 from backend.routers.analytics import router as analytics_router
 from backend.routers.anomaly import router as anomaly_router
 from backend.routers.decisions import router as decisions_router
+from backend.routers.simulate import router as simulate_router
 from sqlalchemy import text
 
 @asynccontextmanager
@@ -32,6 +33,7 @@ app.include_router(graph_router)
 app.include_router(analytics_router)
 app.include_router(anomaly_router)
 app.include_router(decisions_router)
+app.include_router(simulate_router)
 
 
 @app.get("/api/health")
